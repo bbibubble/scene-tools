@@ -238,7 +238,7 @@ def generate_plan(question: str, tools: List[str], diversity_hint: str = "") -> 
     return None
 
 
-# ===================== 【核心改动】主动降级构造负样本 =====================
+# ===================== 主动降级构造负样本 =====================
 DEGRADE_STRATEGIES = ["all_wrong_tools", "missing_step", "single_step", "vague_content", "wrong_tools_and_vague"]
 
 def degrade_plan(plan_json: dict, tools: list) -> Tuple[dict, str]:
@@ -499,7 +499,7 @@ def main():
         print(f"❌ 加载任务配置失败：{e}")
         return
 
-    # 多样性提示池（让生成的Plan有结构差异）
+    # 多样性提示池
     diversity_hints = [
         "注意：请在方案中包含数据验证或结果确认步骤。",
         "注意：请考虑步骤间的数据依赖关系，明确说明上下步骤的数据传递。",
@@ -539,7 +539,7 @@ def main():
             save_resume_data(preference_data, task_idx + 1)
             continue
 
-        # 生成多个Plan（带死循环保护）
+        # 生成多个Plan
         valid_plans = []
         valid_scores = []
         max_attempts = config.num_plans * 3
@@ -570,7 +570,7 @@ def main():
         top_plans = [x[0] for x in ranked[:config.top_k]]
         discard_count = 0
 
-        # ===================== 【核心改动】构造偏好对 =====================
+        # ===================== 构造偏好对 =====================
         for plan_a_text in top_plans:
             plan_a_json = validate_json(plan_a_text)
 
