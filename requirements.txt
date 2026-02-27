@@ -1,0 +1,13 @@
+numpy>=1.24
+
+Scene → Toolset
+
+datasets>=2.14.0 sentence-transformers>=2.2.2 hdbscan>=0.8.33
+
+Preference Synthesis
+
+python-dotenv>=1.0.0 openai>=1.0.0 tenacity>=8.2.3
+
+Optional
+
+tqdm>=4.66.0
