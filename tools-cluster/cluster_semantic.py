@@ -17,7 +17,7 @@ MIN_SERVICE_SUPPORT = 5
 # HDBSCAN 参数
 HDBSCAN_MIN_CLUSTER_SIZE = 2   # 簇最少工具数
 HDBSCAN_MIN_SAMPLES = 1        # 越小越宽松，噪声点越少
-# 编码模型（轻量，本地运行快）
+# 编码模型
 EMBED_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 
 STOP_TOOLS = {
@@ -103,23 +103,30 @@ def embed_tools(all_tools: list, model) -> np.ndarray:
 
 
 # ============================================================
-# 4. 【核心】HDBSCAN 语义聚类
+# 4. HDBSCAN 语义聚类
 # ============================================================
 
 def cluster_tools_semantic(tools: list, embeddings: np.ndarray) -> dict[str, list]:
     """
     对一个 service 内的工具做 HDBSCAN 语义聚类。
-    返回 {cluster_id_str: [tool, ...]}
-    噪声点（label=-1）单独归为 'noise' 组后按 MAX 切分。
+    大簇（>15个工具）自动提高 min_cluster_size，强制切得更细。
+    噪声点（label=-1）如果数量够多则单独成簇，否则丢弃。
     """
     if len(tools) <= HDBSCAN_MIN_CLUSTER_SIZE:
         return {"0": tools}
 
+    # 大簇动态调整 min_cluster_size，让 HDBSCAN 切得更细
+    n = len(tools)
+    if n > 15:
+        adaptive_min_cluster = max(2, n // 5)   # 每簇约占总数的20%
+    else:
+        adaptive_min_cluster = HDBSCAN_MIN_CLUSTER_SIZE
+
     clusterer = hdbscan.HDBSCAN(
-        min_cluster_size=HDBSCAN_MIN_CLUSTER_SIZE,
+        min_cluster_size=adaptive_min_cluster,
         min_samples=HDBSCAN_MIN_SAMPLES,
         metric="euclidean",
-        cluster_selection_method="eom",   # eom 比 leaf 更合并
+        cluster_selection_method="leaf",  # leaf 比 eom 切得更细
     )
     labels = clusterer.fit_predict(embeddings)
 
@@ -127,11 +134,96 @@ def cluster_tools_semantic(tools: list, embeddings: np.ndarray) -> dict[str, lis
     for tool, label in zip(tools, labels):
         groups[str(label)].append(tool)
 
+    # 噪声点单独处理：够多就保留，否则丢弃
+    noise = groups.pop("-1", [])
+    if len(noise) >= 2:
+        groups["noise"] = noise
+
+    # 如果全部是噪声（聚类完全失败），退回整体作为一个簇
+    if not groups:
+        return {"0": tools}
+
     return dict(groups)
 
 
 # ============================================================
-# 5. 生成 theme 描述（用 service 名 + 簇内高频词）
+# 5. Fallback：HDBSCAN 未切分时按功能前缀做关键词切分
+# ============================================================
+
+FALLBACK_FUNC_GROUPS = [
+    # 通用操作
+    ["search", "find", "lookup", "query"],
+    ["by_class", "by_type", "by_race", "by_faction", "by_quality", "by_set", "by_category"],
+    ["get", "single", "detail", "info", "about"],
+    ["all", "list", "index", "catalog"],
+    ["create", "add", "post", "insert"],
+    ["update", "edit", "modify"],
+    ["delete", "remove"],
+    ["forecast", "predict", "future"],
+    ["current", "live", "realtime", "now"],
+    ["history", "historical", "past", "stats"],
+    ["top", "trending", "popular", "rank", "best"],
+    # 金融技术指标（移动均线类）
+    ["ema", "sma", "wma", "dema", "tema", "trima", "t3ma", "mama", "ma_"],
+    # 金融技术指标（动量/震荡类）
+    ["rsi", "cci", "mom", "roc", "rocr", "cmo", "crsi", "mfi", "willr", "ultosc", "coppock"],
+    # 金融技术指标（趋势类）
+    ["adx", "aroon", "sar", "apo", "ppo", "macd", "dmi", "adosc", "obv"],
+    # 金融技术指标（统计/数学类）
+    ["stddev", "var", "beta", "correl", "linearreg", "sqrt", "ln", "ceil", "floor",
+     "min_", "max_", "avg", "sum", "sub", "div", "midpoint", "midprice", "medprice",
+     "avgprice", "wclprice", "minmax", "minus_di", "percent_b", "ht_"],
+    # 金融基本面
+    ["earnings", "balance_sheet", "dividends", "eps", "growth", "institutional",
+     "sustainability", "recommendations", "analyst", "profile", "statistics", "risk"],
+    # 金融市场数据
+    ["market_movers", "quote", "real_time_price", "time_series", "options",
+     "ipo", "composition", "exchanges", "crypto_exchanges", "currency_conversion",
+     "earliest_timestamp", "symbol_search", "logo"],
+    # 体育赛事类
+    ["match", "fixture", "result", "standing", "score", "league", "season"],
+    ["player", "team", "coach", "squad", "transfer"],
+    ["live", "odds", "lineup", "event"],
+    # 用户名/账号检查类
+    ["instagram", "twitter", "facebook", "tiktok", "snapchat", "reddit",
+     "youtube", "twitch", "github", "pinterest", "tumblr", "telegram"],
+]
+
+def fallback_keyword_split(tools: list) -> dict[str, list]:
+    """
+    HDBSCAN 未能切分时的兜底方案：按工具名功能关键词分组。
+    匹配不到任何组的工具归入 misc。
+    """
+    groups = defaultdict(list)
+    for tool in tools:
+        tool_lower = tool.lower()
+        matched = False
+        for group_kws in FALLBACK_FUNC_GROUPS:
+            if any(kw in tool_lower for kw in group_kws):
+                groups[group_kws[0]].append(tool)  # 用第一个关键词作为组名
+                matched = True
+                break
+        if not matched:
+            groups["misc"].append(tool)
+
+    # 过滤太小的组（合并到 misc）
+    result = {}
+    misc = list(groups.get("misc", []))
+    for label, group_tools in groups.items():
+        if label == "misc":
+            continue
+        if len(group_tools) < 2:
+            misc.extend(group_tools)
+        else:
+            result[label] = group_tools
+    if misc:
+        result["misc"] = misc
+
+    return result if len(result) > 1 else {"0": tools}  # 切不开就原样返回
+
+
+# ============================================================
+# 6. 生成 theme 描述（用 service 名 + 簇内高频词）
 # ============================================================
 
 def infer_cluster_theme(service: str, tools: list) -> str:
@@ -154,7 +246,7 @@ def infer_cluster_theme(service: str, tools: list) -> str:
 
 
 # ============================================================
-# 6. 主流程：构建细粒度 compounds
+# 7. 主流程：构建细粒度 compounds
 # ============================================================
 
 def build_semantic_compounds(scenes, service_profiles, model):
@@ -187,10 +279,35 @@ def build_semantic_compounds(scenes, service_profiles, model):
         # HDBSCAN 聚类
         clusters = cluster_tools_semantic(service_tools, service_embeddings)
 
+        # 如果整个 service 只产出1个簇且工具数>6，fallback 到关键词切分
+        if len(clusters) == 1 and len(service_tools) > 6:
+            only_label = list(clusters.keys())[0]
+            if only_label != "-1":
+                fallback = fallback_keyword_split(service_tools)
+                if len(fallback) > 1:
+                    clusters = fallback
+
+        # 对仍然超过20个工具的簇，强制再做一次fallback关键词切分
+        expanded_clusters = {}
+        for label, cluster_tools in clusters.items():
+            if len(cluster_tools) > 20:
+                sub = fallback_keyword_split(cluster_tools)
+                if len(sub) > 1:
+                    for sub_label, sub_tools in sub.items():
+                        expanded_clusters[f"{label}_{sub_label}"] = sub_tools
+                else:
+                    expanded_clusters[label] = cluster_tools
+            else:
+                expanded_clusters[label] = cluster_tools
+        clusters = expanded_clusters
+
         for cluster_label, cluster_tools in clusters.items():
             # 噪声点或过小的簇直接跳过
             if len(cluster_tools) < 2:
                 continue
+            # 超过20个工具的簇标记为large，保留进test_large.json
+            if len(cluster_tools) > 20:
+                print(f"  📦 超大簇 {service}/{cluster_label}：{len(cluster_tools)} 个工具 → test_large.json")
 
             # 计算 support
             chunk_set = set(cluster_tools)
@@ -226,9 +343,7 @@ def convert_to_test_json(compounds: list) -> list:
         {
             "theme": c["theme"],
             "tools": c["tools"],
-            "_compound_id": c["compound_id"],
-            "_service": c["service"],
-            "_num_scenes": c["num_simple_scenes"],
+            "num_tools": c["num_tools"],
         }
         for c in compounds
     ]

@@ -1,9 +1,9 @@
 [
   {
-    "compound_id": "compound_00029",
+    "compound_id": "compound_00023",
     "theme": "jokes categories chuck norris",
     "service": "chuck_norris",
-    "cluster_label": "-1",
+    "cluster_label": "noise",
     "tools": [
       "jokes_categories_for_chuck_norris",
       "jokes_random_for_chuck_norris",
@@ -13,10 +13,10 @@
     "num_simple_scenes": 4503
   },
   {
-    "compound_id": "compound_00063",
+    "compound_id": "compound_00048",
     "theme": "info song soundcloud",
     "service": "soundcloud",
-    "cluster_label": "-1",
+    "cluster_label": "noise",
     "tools": [
       "playlist_info_for_soundcloud",
       "search_for_soundcloud",
@@ -28,7 +28,7 @@
     "num_simple_scenes": 2524
   },
   {
-    "compound_id": "compound_00202",
+    "compound_id": "compound_00173",
     "theme": "infos search deezer",
     "service": "deezer",
     "cluster_label": "2",
@@ -41,10 +41,10 @@
     "num_simple_scenes": 2220
   },
   {
-    "compound_id": "compound_00111",
+    "compound_id": "compound_00095",
     "theme": "find all manatee jokes",
     "service": "manatee_jokes",
-    "cluster_label": "-1",
+    "cluster_label": "noise",
     "tools": [
       "find_all_for_manatee_jokes",
       "get_by_id_for_manatee_jokes",
@@ -54,10 +54,10 @@
     "num_simple_scenes": 1936
   },
   {
-    "compound_id": "compound_00201",
+    "compound_id": "compound_00174",
     "theme": "genre playlist deezer",
     "service": "deezer",
-    "cluster_label": "-1",
+    "cluster_label": "noise",
     "tools": [
       "genre_for_deezer",
       "playlist_for_deezer",
