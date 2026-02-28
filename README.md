@@ -17,7 +17,7 @@ tools-cluster/cluster_semantic.py     # 阶段一：工具语义聚类
       │        test_small.json（每簇 ≤10 个工具）
       │        test_large.json（每簇 >10 个工具）
       ▼
-test/generate_preference_data.py      # 阶段二：生成偏好数据对
+preference-data-synthesis/generate_preference_data.py      # 阶段二：生成偏好数据对
       │  输出：test/preference_data.json
       ▼
    训练数据
@@ -28,17 +28,19 @@ test/generate_preference_data.py      # 阶段二：生成偏好数据对
 ## 项目结构
 
 ```
-preference-data-synthesis/
+
 ├── tools-cluster/
 │   ├── cluster_semantic.py               # 工具语义聚类脚本
 │   ├── sample_semantic.json              # 聚类结果样例（Top 5）
 │   ├── test_small.json                   # ≤10 个工具的簇（推荐用于生成）
 │   ├── test_large.json                   # >10 个工具的簇
 │   └── toolbench_semantic_compounds.json # 完整聚类结果
-├── test/
+├── preference-data-synthesis/
 │   ├── generate_preference_data.py       # 偏好数据生成脚本
-│   ├── test.json                         # 输入：工具簇配置
-│   └── preference_data.json             # 输出：最终数据集
+│   ├── test/
+│   │   ├── test.json                        # 输入：工具簇配置
+│   └── └── preference_data.json             # 输出：最终数据集
+│   
 ├── LICENSE
 ├── README.md
 └── requirements.txt
