@@ -17,7 +17,7 @@ load_dotenv()
 # ===================== 配置类 =====================
 @dataclass
 class Config:
-    input_file: str = "test.json"
+    input_file: str = "D:\code\Agent\\tools-cluster\\test.json"
     output_file: str = "preference_data.json"
     resume_file: str = "resume_preference.json"
     num_plans: int = 8
